@@ -1,16 +1,23 @@
 import pygame, sys
 import os
 import random
+import csv
 pygame.init()
 #set time
 clock=pygame.time.Clock()
 FPS=60
-
+DISPLAY_WIDTH=800
+DISPLAY_HIGH=int(DISPLAY_WIDTH*0.8)
 #game vel
 GARVITY=0.75
-TILE_SIZE= 20# 接觸居離
+# TILE_SIZE= 20# 接觸居離
+ROWS=16
+COLS=150
+TILE_SIZE=DISPLAY_HIGH//ROWS
+TILE_TYPES=22
+level =1
 #display size
-DISPLAY = pygame.display.set_mode((800,600))
+DISPLAY = pygame.display.set_mode((DISPLAY_WIDTH,DISPLAY_HIGH))
 
 pygame.display.set_caption("damo")
 #背景顏色
@@ -24,11 +31,17 @@ movie_right=False
 shoot=False
 grenade=False
 grenade_thrown=False
+#load world
+img_list=[]
+for x in range(TILE_TYPES):
+    img =pygame.image.load(f'img/Tile/{x}.png')
+    img=pygame.transform.scale(img,(TILE_SIZE,TILE_SIZE))
+    img_list.append(img)
 #load image
 bullet_img=pygame.image.load("./img/bullet/bullet.png").convert_alpha()
 bullet_img = pygame.transform.scale(bullet_img,(int((bullet_img.get_height())*0.5),int(bullet_img.get_width()*0.5)))
 grenade_img=pygame.image.load("./img/grenade/00.png").convert_alpha()
-grenade_img = pygame.transform.scale(grenade_img,(int((grenade_img.get_height()*0.7)),int(grenade_img.get_width()*0.7)))
+grenade_img = pygame.transform.scale(grenade_img,(int((grenade_img.get_height()*0.8)),int(grenade_img.get_width()*0.8)))
 HPbox_img=pygame.image.load("./img/box/HPbox/00.png").convert_alpha()
 HPbox_img = pygame.transform.scale(HPbox_img,(int((HPbox_img.get_height()*0.5)),int(HPbox_img.get_width()*0.5)))
 bulletbox_img=pygame.image.load("./img/box/bulletbox/00.png").convert_alpha()
@@ -55,7 +68,7 @@ def draw_text(text,font,text_col,x,y):
 #更新背景
 def draw_bg():
     DISPLAY.fill(BG)
-    pygame.draw.line(DISPLAY,RED,(0,500),(800,500))
+    
 class human(pygame.sprite.Sprite):
     def __init__(self,character,x,y,size,speed,ammo,health,grenades):
         pygame.sprite.Sprite.__init__(self)
@@ -105,6 +118,8 @@ class human(pygame.sprite.Sprite):
         self.img=self.animation_list[self.run_index][self.index]
         self.rect=self.img.get_rect()
         self.rect.center=(x,y)
+        self.width=self.img.get_width()
+        self.height=self.img.get_height()
     def update(self):
         self.update_animation()
         self.check_alive()
@@ -126,7 +141,7 @@ class human(pygame.sprite.Sprite):
             self.direction=-1
         
         if self.jump==True and self.in_air==False:
-            self.vel_y=-11#hiw high
+            self.vel_y=-13#how high
             self.jump=False
             self.in_air=True
         # 重利 gravity
@@ -134,10 +149,23 @@ class human(pygame.sprite.Sprite):
         if self.vel_y>10:
             self.vel_y
         dy+= self.vel_y
-        # floor =500
-        if self.rect.bottom+dy>500:
-            dy=500-self.rect.bottom
-            self.in_air=False#回歸地面
+        #check floor 
+        for tile in world.obstacle_lst:
+           # check floor x
+            if tile[1].colliderect(self.rect.x+dx,self.rect.y,self.width,self.height):
+                dx=0
+            # check collision in y
+            if tile[1].colliderect(self.rect.x,self.rect.y+dy,self.width,self.height):
+                #if jump
+                if self.vel_y <0:
+                    self.vel_y=0
+                    dy = tile[1].bottom-self.rect.top
+                elif self.vel_y >=0:
+                    self.vel_y=0
+                    self.in_air=False
+                    dy = tile[1].top-self.rect.bottom
+
+        
 
         self.rect.x+=dx
         self.rect.y+=dy
@@ -221,7 +249,73 @@ class human(pygame.sprite.Sprite):
     def draw(self):
         DISPLAY.blit(pygame.transform.flip(self.img,self.flip,False),self.rect)
         pygame.draw.rect(DISPLAY,RED,self.rect,1)#碰撞箱
+class World():
+    def __init__(self):
+        self.obstacle_lst=[]
+    def process_data(self,data):
+        for y,row in enumerate(data):
+            for x,tile in enumerate(row):
+                if tile>=0:
+                    img=img_list[tile]
+                    img_rect=img.get_rect()
+                    img_rect.x=x*TILE_SIZE
+                    img_rect.y=y*TILE_SIZE
+                    tile_data=(img,img_rect)
+                    if tile>=0 and tile<=8:
+                        self.obstacle_lst.append(tile_data)
+                    elif tile ==9 or tile==10:
+                        water=Water(img,x*TILE_SIZE,y*TILE_SIZE)
+                        water_group.add(water)
+                    elif tile >=11 and tile<=14:
+                        decoration=Decoration(img,x*TILE_SIZE,y*TILE_SIZE)
+                        decoration_group.add(decoration)
+                    elif tile ==15: 
+                        #(self,character,x,y,size,speed,ammo,health,grenades)                                              
+                        player= human('character',x*TILE_SIZE,y*TILE_SIZE,0.5,6,20,10,20)
+                        HPbar=Healthbar(10,10,player.health,player.health)
+                    elif tile ==16:
+                        enemy=human('doroenemy',x*TILE_SIZE,y*TILE_SIZE,0.5,2,5,5,5)
+                        enemyHP=moveHPbar(enemy)#add enemy HP
+                        enemy_group.add(enemy)
+                        enemyHP_group.add(enemyHP)
+                    elif tile ==17: #ammbox
+                        #item box                        
+                        item_box=Itembox('bullet',x*TILE_SIZE,y*TILE_SIZE)
+                        item_box_group.add(item_box)
+                    elif tile ==18:
+                        item_box=Itembox('grenade',x*TILE_SIZE,y*TILE_SIZE)
+                        item_box_group.add(item_box)
+                    elif tile ==19:                       
+                        item_box=Itembox('health',x*TILE_SIZE,y*TILE_SIZE)
+                        item_box_group.add(item_box)
+                    elif tile ==20:
+                        exit=Exit(img,x*TILE_SIZE,y*TILE_SIZE)
+                        exit_group.add(exit)
+        return player,HPbar
+    def draw(self):
+        for tile in self.obstacle_lst:
+            DISPLAY.blit(tile[0],tile[1])
 
+class Decoration(pygame.sprite.Sprite):
+    def __init__(self,img,x,y):
+          pygame.sprite.Sprite.__init__(self)
+          self.image=img
+          self.rect=self.image.get_rect()
+          self.rect.midtop=(x+TILE_SIZE//2,y+(TILE_SIZE-self.image.get_height()))
+
+class Water(pygame.sprite.Sprite):
+    def __init__(self,img,x,y):
+          pygame.sprite.Sprite.__init__(self)
+          self.image=img
+          self.rect=self.image.get_rect()
+          self.rect.midtop=(x+TILE_SIZE//2,y+(TILE_SIZE-self.image.get_height()))
+
+class Exit(pygame.sprite.Sprite):
+    def __init__(self,img,x,y):
+          pygame.sprite.Sprite.__init__(self)
+          self.image=img
+          self.rect=self.image.get_rect()
+          self.rect.midtop=(x+TILE_SIZE//2,y+(TILE_SIZE-self.image.get_height()))
 class Itembox(pygame.sprite.Sprite):
     def __init__(self,item_type,x,y):
           pygame.sprite.Sprite.__init__(self)
@@ -262,26 +356,36 @@ class Healthbar():
         pygame.draw.rect(DISPLAY,BLACK,(self.x-2,self.y-2,154,24))
         pygame.draw.rect(DISPLAY,RED,(self.x,self.y,150,20))
         pygame.draw.rect(DISPLAY,GREEN,(self.x,self.y,150*ratio,20))
-class moveHPbar():
+class moveHPbar(pygame.sprite.Sprite):
     def __init__(self, enemy, offset_x=0, offset_y=-10):
+        super().__init__()
         # 綁定敵人
         self.enemy = enemy
         self.offset_x = offset_x  # 血條相對於敵人的水平偏移
         self.offset_y = offset_y  # 血條相對於敵人的垂直偏移
 
+        # 創建一個透明的 Surface 作為 image
+        self.image = pygame.Surface((1, 1), pygame.SRCALPHA)
+        self.rect = self.image.get_rect()
+
+    def update(self):
+        # 動態更新血條的位置
+        if self.enemy.health > 0:
+            self.rect.x = self.enemy.rect.x + self.offset_x
+            self.rect.y = self.enemy.rect.y + self.offset_y
+        else:
+            self.kill()  # 如果敵人死亡，移除血條
+
     def draw(self):
         if self.enemy.health > 0:
-            # 計算血條位置
-            x = self.enemy.rect.x + self.offset_x
-            y = self.enemy.rect.y + self.offset_y
-
-            # 比例換算
+            # 計算血量比例
             ratio = self.enemy.health / self.enemy.max_health
-            pygame.draw.rect(DISPLAY, BLACK, (x - 2, y - 2, 52, 7))  # 外框
-            pygame.draw.rect(DISPLAY, RED, (x, y, 50, 6))            # 背景（紅色）
-            pygame.draw.rect(DISPLAY, GREEN, (x, y, 50 * ratio, 6))  # 當前血量（綠色）
-        else:
-            pass
+            # 繪製血條
+            pygame.draw.rect(DISPLAY, BLACK, (self.rect.x - 2, self.rect.y - 2, 52, 7))  # 外框
+            pygame.draw.rect(DISPLAY, RED, (self.rect.x, self.rect.y, 50, 6))            # 背景（紅色）
+            pygame.draw.rect(DISPLAY, GREEN, (self.rect.x, self.rect.y, 50 * ratio, 6))  # 當前血量（綠色）
+
+        
 class Bullet(pygame.sprite.Sprite):
       def __init__(self, x,y,direction):
         pygame.sprite.Sprite.__init__(self)
@@ -301,8 +405,12 @@ class Bullet(pygame.sprite.Sprite):
         
         self.rect.x+=(-self.direction*self.speed)
       #check bullet has gone off display
-        if self.rect.right<0 or self.rect.left>800:#800
+        if self.rect.right<0 or self.rect.left>DISPLAY_WIDTH:#800
             self.kill()
+        #check tile
+        for tile in world.obstacle_lst:
+            if tile[1].colliderect(self.rect):
+                self.kill()
         
     # #hit enumy
         if pygame.sprite.spritecollide(player,bullet_group,False):
@@ -329,6 +437,8 @@ class Grenade(pygame.sprite.Sprite):
         self.direction = direction
         self.rect=self.image.get_rect()
         self.rect.center=(x,y)
+        self.width=self.image.get_width()
+        self.height=self.image.get_height()
         self.direction=direction
     def update(self):
         self.vel_y+=GARVITY
@@ -338,17 +448,30 @@ class Grenade(pygame.sprite.Sprite):
         # if self.rect.bottom+dy==500:
         #     self.direction*=-1
         #     dx=self.direction*(self.speed-1)
+        for tile in world.obstacle_lst:
+            if tile[1].colliderect(self.rect.x+dx,self.rect.y,self.width,self.height):#800
+                self.direction*=-1
+                dx=-self.direction*self.speed
+            # check collision in y
+            if tile[1].colliderect(self.rect.x,self.rect.y+dy,self.width,self.height):
+                self.speed=0
+                #if throw up
+                if self.vel_y <0:
+                    self.vel_y = 0
+                    self.speed=7#歸還地面碰裝失去的速度
+                    
+                    dx=self.direction*self.speed
+                    dy = tile[1].bottom-self.rect.top
+                elif self.vel_y >=0:
+                    self.vel_y=0
+                    dy = tile[1].top-self.rect.bottom
+
         
-        if self.rect.bottom+dy>530: #回歸地面
-            dy=520-self.rect.bottom
-            self.speed=0
         self.rect.x+=dx
         self.rect.y+=dy
-        if self.rect.left+dx<0 or self.rect.right+dx>800:#800
-            self.direction*=-1
-            dx=self.direction*(self.speed-3)
+        
         self.timer-=1
-        if self.timer<=0 or self.speed==0 :
+        if self.timer<=0  :
             self.kill()
             explosion=Explosion(self.rect.x,self.rect.y,0.5)
             explosion_group.add(explosion)
@@ -373,7 +496,7 @@ class Explosion(pygame.sprite.Sprite):
         self.frame_index=0
         self.image=self.images[self.frame_index]
         self.rect=self.image.get_rect()
-        self.rect.center=(x+40,y+20)
+        self.rect.center=(x+15,y+10)
         self.counter=0      
     def update(self):
         explosion_speed=4
@@ -391,46 +514,66 @@ bullet_group=pygame.sprite.Group()
 grenade_group=pygame.sprite.Group()
 explosion_group=pygame.sprite.Group()
 item_box_group=pygame.sprite.Group()
+enemyHP_group=pygame.sprite.Group()
+water_group=pygame.sprite.Group()
+decoration_group=pygame.sprite.Group()
+exit_group=pygame.sprite.Group()
+# #item box
+# item_box=Itembox('health',100,450)
+# item_box_group.add(item_box)
+# item_box=Itembox('bullet',300,450)
+# item_box_group.add(item_box)
+# item_box=Itembox('grenade',400,450)
+# item_box_group.add(item_box)
 
-#item box
-item_box=Itembox('health',100,450)
-item_box_group.add(item_box)
-item_box=Itembox('bullet',300,450)
-item_box_group.add(item_box)
-item_box=Itembox('grenade',400,450)
-item_box_group.add(item_box)
+# # def platyer
+# #        (self,character, x,  y, size,speed,ammo,health,grenades)
 
-# def platyer
-#        (self,character, x,  y, size,speed,ammo,health,grenades)
+# player= human('character',200,200,0.6,3,20,10,5)
+# HPbar=Healthbar(10,10,player.health,player.health)
 
-player= human('character',200,200,0.6,3,20,10,5)
-HPbar=Healthbar(10,10,player.health,player.health)
+# #AI
 
-#AI
+# enemy=human('doroenemy',100,450,0.6,2,5,5,5)
+# enemyHP=moveHPbar(enemy)#add enemy HP
+# enemyHP_group.add(enemyHP)
+# enemy_group.add(enemy)
 
-enemy=human('doroenemy',100,450,0.6,2,5,5,5)
-enemyHP=moveHPbar(enemy)
-
-enemy2=human('doroenemy',300,300,0.6,2,5,5,5)
-enemyHP2=moveHPbar(enemy2)
-enemy_group.add(enemy)
-enemy_group.add(enemy2)
-# boss=human("boss",500,400,0.3,5,20,5,5)
-
+# enemy2=human('doroenemy',300,300,0.6,2,5,5,5)
+# enemyHP2=moveHPbar(enemy2)#add enemy HP
+# enemyHP_group.add(enemyHP2)
+# enemy_group.add(enemy2)
+# # boss=human("boss",500,400,0.3,5,20,5,5)
+# #empty ti;e list
+world_data=[]
+for row in range(ROWS):
+    r=[-1]*COLS
+    world_data.append(r)
+    #load in level data 
+with open(f"level{level}_data.csv",newline='') as csvfile:
+    reader=csv.reader(csvfile,delimiter=',')
+    for x,row in enumerate(reader):
+        for y,tile in enumerate(row):
+            world_data[x][y]=int(tile)
+world= World()
+player,HPbar=world.process_data(world_data)
 #main game
 while True:
     clock.tick(FPS)
     draw_bg()
+    #updata background
+    world.draw()
+    #show enemy HPbar
+    # enemyHP.draw()
+    # enemyHP2.draw()
     #show HPbar
-    enemyHP.draw()
-    enemyHP2.draw()
     HPbar.draw(player.health)
     #文字數值機制
     draw_text(f'AMMO: {player.ammo}',font,WHITE,10,35)
     # draw_text(f'HP: {player.health}',font,WHITE,10,55)
     draw_text(f'grenade:',font,WHITE,10,65)
     for x in range(player.grenades):
-        DISPLAY.blit(grenade_img,(65+(x*30),25))
+        DISPLAY.blit(grenade_img,(100+(x*30),62))
     #player
     player.update()
     player.draw()
@@ -440,7 +583,10 @@ while True:
         enemy.AI()
         enemy.update()
         enemy.draw()
-
+        enemyHP_group.update()
+        enemyHP_group.draw(DISPLAY)
+    for hp_bar in enemyHP_group:
+        hp_bar.draw()
     # #enemy
     # boss.update()
     # boss.draw()d
@@ -448,14 +594,26 @@ while True:
 
     buttons = pygame.mouse.get_pressed()
     #draw group
+    
     explosion_group.update()
     bullet_group.update()
     grenade_group.update()
     item_box_group.update()
+    water_group.update()
+    decoration_group.update()
+    exit_group.update()
+
+
     explosion_group.draw(DISPLAY)
     bullet_group.draw(DISPLAY)
     grenade_group.draw(DISPLAY)
     item_box_group.draw(DISPLAY)
+    water_group.draw(DISPLAY)
+    decoration_group.draw(DISPLAY)
+    exit_group.draw(DISPLAY)
+    
+    
+
     if player.alive:
         #shooting
         if movie_left or movie_right :
