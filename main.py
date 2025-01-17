@@ -14,7 +14,10 @@ GARVITY=0.75
 ROWS=16
 COLS=150
 TILE_SIZE=DISPLAY_HIGH//ROWS
+SCROLL_THRESH=200
 TILE_TYPES=22
+display_scroll=0
+bg_scroll=0
 level =1
 #display size
 DISPLAY = pygame.display.set_mode((DISPLAY_WIDTH,DISPLAY_HIGH))
@@ -37,6 +40,13 @@ for x in range(TILE_TYPES):
     img =pygame.image.load(f'img/Tile/{x}.png')
     img=pygame.transform.scale(img,(TILE_SIZE,TILE_SIZE))
     img_list.append(img)
+#bacj ground image
+tree_img=pygame.image.load("./img/background/Tree.png").convert_alpha()
+tree_img = pygame.transform.scale(tree_img,(int((tree_img.get_height())),int(tree_img.get_width()*0.2)))
+city_img=pygame.image.load("./img/background/City.png").convert_alpha()
+city_img = pygame.transform.scale(city_img,(int((city_img.get_height())),int(city_img.get_width()*0.85)))
+mountain_img=pygame.image.load("./img/background/Mountain.png").convert_alpha()
+sky_img=pygame.image.load("./img/background/Sky.png").convert_alpha()
 #load image
 bullet_img=pygame.image.load("./img/bullet/bullet.png").convert_alpha()
 bullet_img = pygame.transform.scale(bullet_img,(int((bullet_img.get_height())*0.5),int(bullet_img.get_width()*0.5)))
@@ -68,7 +78,20 @@ def draw_text(text,font,text_col,x,y):
 #更新背景
 def draw_bg():
     DISPLAY.fill(BG)
-    
+    sky_width=sky_img.get_width()
+    tree_width=tree_img.get_width()
+    city_width=city_img.get_width()
+    mountain_width=mountain_img.get_width()
+    sky_width=sky_img.get_width()
+    for x in range(6):
+        DISPLAY.blit(sky_img,((x*sky_width)-bg_scroll*0.5,0))
+        mountain_img_height = mountain_img.get_height()
+        DISPLAY.blit(mountain_img, ((x*mountain_width)-bg_scroll*0.6, int(DISPLAY_HIGH - mountain_img_height - 100)))
+        tree_img_height = tree_img.get_height()
+        DISPLAY.blit(tree_img, ((x*tree_width)-bg_scroll*0.7, int(DISPLAY_HIGH - tree_img_height )))
+        city_img_height =city_img.get_height()
+        DISPLAY.blit(city_img, ((x*city_width)-bg_scroll, int(DISPLAY_HIGH - city_img_height+245)))
+        
 class human(pygame.sprite.Sprite):
     def __init__(self,character,x,y,size,speed,ammo,health,grenades):
         pygame.sprite.Sprite.__init__(self)
@@ -128,6 +151,7 @@ class human(pygame.sprite.Sprite):
         
     def move(self,movie_left,movie_right):
         #movement variables
+        display_scroll=0
         dx=0
         dy=0
 
@@ -141,7 +165,7 @@ class human(pygame.sprite.Sprite):
             self.direction=-1
         
         if self.jump==True and self.in_air==False:
-            self.vel_y=-13#how high
+            self.vel_y=-12#how high
             self.jump=False
             self.in_air=True
         # 重利 gravity
@@ -164,11 +188,20 @@ class human(pygame.sprite.Sprite):
                     self.vel_y=0
                     self.in_air=False
                     dy = tile[1].top-self.rect.bottom
-
+        if self.character=='character':
+            if self.rect.left+dx<0 or self.rect.right+dx>DISPLAY_WIDTH:
+                dx=0
         
 
         self.rect.x+=dx
         self.rect.y+=dy
+        #update scroll
+        if self.character=='character':
+            if (self.rect.right>DISPLAY_WIDTH-SCROLL_THRESH and bg_scroll<(world.level_length*TILE_SIZE)-DISPLAY_WIDTH)\
+                or (self.rect.left<SCROLL_THRESH and bg_scroll>abs(dx)):
+                self.rect.x-=dx
+                display_scroll=-dx
+        return display_scroll
 
     def shoot(self):
         if self.shoot_cooldown==0 and self.ammo>0:
@@ -218,6 +251,7 @@ class human(pygame.sprite.Sprite):
                     self.idling=False
                 self.vision.center=(self.rect.centerx-75*self.direction,self.rect.centery)
                 # pygame.draw.rect(DISPLAY,RED,self.vision)
+        self.rect.x+=display_scroll
     def update_animation(self):
         #timer
         ANIMATION_COOLDOWN=100
@@ -253,6 +287,7 @@ class World():
     def __init__(self):
         self.obstacle_lst=[]
     def process_data(self,data):
+        self.level_length=len(data[0])
         for y,row in enumerate(data):
             for x,tile in enumerate(row):
                 if tile>=0:
@@ -294,6 +329,7 @@ class World():
         return player,HPbar
     def draw(self):
         for tile in self.obstacle_lst:
+            tile[1][0]+=display_scroll
             DISPLAY.blit(tile[0],tile[1])
 
 class Decoration(pygame.sprite.Sprite):
@@ -302,6 +338,8 @@ class Decoration(pygame.sprite.Sprite):
           self.image=img
           self.rect=self.image.get_rect()
           self.rect.midtop=(x+TILE_SIZE//2,y+(TILE_SIZE-self.image.get_height()))
+    def update(self):
+        self.rect.x+=display_scroll
 
 class Water(pygame.sprite.Sprite):
     def __init__(self,img,x,y):
@@ -309,6 +347,8 @@ class Water(pygame.sprite.Sprite):
           self.image=img
           self.rect=self.image.get_rect()
           self.rect.midtop=(x+TILE_SIZE//2,y+(TILE_SIZE-self.image.get_height()))
+    def update(self):
+        self.rect.x+=display_scroll
 
 class Exit(pygame.sprite.Sprite):
     def __init__(self,img,x,y):
@@ -316,6 +356,8 @@ class Exit(pygame.sprite.Sprite):
           self.image=img
           self.rect=self.image.get_rect()
           self.rect.midtop=(x+TILE_SIZE//2,y+(TILE_SIZE-self.image.get_height()))
+    def update(self):
+        self.rect.x+=display_scroll
 class Itembox(pygame.sprite.Sprite):
     def __init__(self,item_type,x,y):
           pygame.sprite.Sprite.__init__(self)
@@ -325,6 +367,8 @@ class Itembox(pygame.sprite.Sprite):
           self.rect.midtop=(x+TILE_SIZE//2,y+(TILE_SIZE-self.image.get_height()))
     def update(self):
         #觸碰機制
+        self.rect.x+=display_scroll
+
         if pygame.sprite.collide_rect(self,player):
             #ccheak box
             if self.item_type=='health':
@@ -339,7 +383,8 @@ class Itembox(pygame.sprite.Sprite):
                 player.ammo+=10
                 print(player.ammo)
             self.kill()
-
+    
+        
 class Healthbar():
     offset_x=0
     offset_y=-20
@@ -403,7 +448,7 @@ class Bullet(pygame.sprite.Sprite):
             
       def update(self):
         
-        self.rect.x+=(-self.direction*self.speed)
+        self.rect.x+=(-self.direction*self.speed)+display_scroll
       #check bullet has gone off display
         if self.rect.right<0 or self.rect.left>DISPLAY_WIDTH:#800
             self.kill()
@@ -467,7 +512,7 @@ class Grenade(pygame.sprite.Sprite):
                     dy = tile[1].top-self.rect.bottom
 
         
-        self.rect.x+=dx
+        self.rect.x+=dx+display_scroll
         self.rect.y+=dy
         
         self.timer-=1
@@ -499,6 +544,7 @@ class Explosion(pygame.sprite.Sprite):
         self.rect.center=(x+15,y+10)
         self.counter=0      
     def update(self):
+        self.rect.x+=display_scroll
         explosion_speed=4
         self.counter+=1
         if self.counter>=explosion_speed:
@@ -634,7 +680,9 @@ while True:
             player.updata_action(1)#1=run
         else:
             player.updata_action(0)
-        player.move(movie_left,movie_right)
+        display_scroll=player.move(movie_left,movie_right)
+        bg_scroll-=display_scroll
+        
 
 
     for event in pygame.event.get():
