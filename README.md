@@ -1,4 +1,4 @@
-# Nikkepygame
+# Nikke_pygame
 
 ## Demo
 
