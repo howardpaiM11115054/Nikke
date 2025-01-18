@@ -21,6 +21,7 @@ display_scroll=0
 bg_scroll=0
 level =1
 start_game=False
+MAX_LEVELS=3
 #display size
 DISPLAY = pygame.display.set_mode((DISPLAY_WIDTH,DISPLAY_HIGH))
 
@@ -216,6 +217,10 @@ class human(pygame.sprite.Sprite):
         #check in water
         if pygame.sprite.spritecollide(self,water_group,False):
             self.health=0
+        #check for collision exit
+        level_complete=False
+        if pygame.sprite.spritecollide(self,exit_group,False):
+            level_complete=True
 
         #outside of map
         if self.rect.bottom>DISPLAY_HIGH:
@@ -236,7 +241,7 @@ class human(pygame.sprite.Sprite):
                 or (self.rect.left<SCROLL_THRESH and bg_scroll>abs(dx)):
                 self.rect.x-=dx
                 display_scroll=-dx
-        return display_scroll
+        return display_scroll,level_complete
 
     def shoot(self):
         if self.shoot_cooldown==0 and self.ammo>0:
@@ -341,7 +346,7 @@ class World():
                         decoration_group.add(decoration)
                     elif tile ==15: 
                         #(self,character,x,y,size,speed,ammo,health,grenades)                                              
-                        player= human('character',x*TILE_SIZE,y*TILE_SIZE,0.5,6,20,10,20)
+                        player= human('character',x*TILE_SIZE,y*TILE_SIZE,0.5,6,20,10,10)
                         HPbar=Healthbar(10,10,player.health,player.health)
                     elif tile ==16:
                         enemy=human('doroenemy',x*TILE_SIZE,y*TILE_SIZE,0.5,2,5,5,5)
@@ -667,9 +672,9 @@ while True:
         #show HPbar
         HPbar.draw(player.health)
         #文字數值機制
-        draw_text(f'AMMO: {player.ammo}',font,WHITE,10,35)
+        draw_text(f'AMMO: {player.ammo}',font,BLACK,10,35)
         # draw_text(f'HP: {player.health}',font,WHITE,10,55)
-        draw_text(f'grenade:',font,WHITE,10,65)
+        draw_text(f'grenade:',font,BLACK,10,65)
         for x in range(player.grenades):
             DISPLAY.blit(grenade_img,(100+(x*30),62))
         #player
@@ -729,12 +734,28 @@ while True:
             if player.in_air:
                 player.updata_action(0)
             #show step 跑或休息
-            if movie_left or movie_right:
+            elif movie_left or movie_right:
                 player.updata_action(1)#1=run
             else:
                 player.updata_action(0)
-            display_scroll=player.move(movie_left,movie_right)
+            display_scroll,level_complete=player.move(movie_left,movie_right)
             bg_scroll-=display_scroll
+            #check player finish
+            if level_complete:
+                level+=1
+                bg_scroll = 0
+                world_data = reset_level() 
+                if level<=MAX_LEVELS:
+                    with open(f"level{level}_data.csv", newline='') as csvfile:
+                        reader = csv.reader(csvfile, delimiter=',')
+                        for x, row in enumerate(reader):
+                            for y, tile in enumerate(row):
+                                world_data[x][y] = int(tile)
+
+                    # 創建新的 World 對象
+                    world = World()
+                    player, HPbar = world.process_data(world_data)
+
 
         else: 
             display_scroll = 0  # 跟速度有關
