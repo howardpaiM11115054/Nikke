@@ -51,6 +51,7 @@ mountain_img=pygame.image.load("./img/background/Mountain.png").convert_alpha()
 sky_img=pygame.image.load("./img/background/Sky.png").convert_alpha()
 #button image
 start_img=pygame.image.load("./img/button/start_button.png").convert_alpha()
+restart_img=pygame.image.load("./img/button/restart_button.png").convert_alpha()
 exit_img=pygame.image.load("./img/button/exit_button.png").convert_alpha()
 #load image
 bullet_img=pygame.image.load("./img/bullet/bullet.png").convert_alpha()
@@ -96,7 +97,22 @@ def draw_bg():
         DISPLAY.blit(tree_img, ((x*tree_width)-bg_scroll*0.7, int(DISPLAY_HIGH - tree_img_height )))
         city_img_height =city_img.get_height()
         DISPLAY.blit(city_img, ((x*city_width)-bg_scroll, int(DISPLAY_HIGH - city_img_height+245)))
-        
+def reset_level():
+    enemy_group.empty()
+    bullet_group.empty()
+    grenade_group.empty()
+    explosion_group.empty()
+    enemyHP_group.empty()
+    water_group.empty()
+    decoration_group.empty()
+    exit_group.empty()
+    item_box_group.empty()
+    #world data empty
+    data=[]
+    for row in range(ROWS):
+        r=[-1]*COLS
+        data.append(r)
+    return data
 class human(pygame.sprite.Sprite):
     def __init__(self,character,x,y,size,speed,ammo,health,grenades):
         pygame.sprite.Sprite.__init__(self)
@@ -197,6 +213,13 @@ class human(pygame.sprite.Sprite):
                     self.vel_y=0
                     self.in_air=False
                     dy = tile[1].top-self.rect.bottom
+        #check in water
+        if pygame.sprite.spritecollide(self,water_group,False):
+            self.health=0
+
+        #outside of map
+        if self.rect.bottom>DISPLAY_HIGH:
+            self.health=0
         if self.character=='character':
             if self.rect.left+dx<0 or self.rect.right+dx>DISPLAY_WIDTH:
                 dx=0
@@ -586,6 +609,9 @@ exit_group=pygame.sprite.Group()
 #build button
 start_button=gamepull.Button(DISPLAY_WIDTH//2-10,DISPLAY_HIGH//2-200,start_img,0.5)
 exit_button=gamepull.Button(DISPLAY_WIDTH//2-240,DISPLAY_HIGH//2-200,exit_img,0.5)
+wmid=DISPLAY_WIDTH//4
+hmid=DISPLAY_HIGH//8
+restart_button=gamepull.Button(wmid,hmid,restart_img,0.5)
 # # def platyer
 # #        (self,character, x,  y, size,speed,ammo,health,grenades)
 
@@ -687,29 +713,47 @@ while True:
     
     
 
-    if player.alive:
-        #shooting
-        if movie_left or movie_right :
-            if shoot:
-                player.shoot()
-            if grenade and grenade_thrown==False and player.grenades>0:
-                grenade=Grenade(player.rect.centerx+(-0.7*player.rect.size[0]*player.direction),
-                                player.rect.top,
-                                player.direction)
-                grenade_group.add(grenade)
-                grenade_thrown=True
-                player.grenades-=1
+        if player.alive:
+            #shooting
+            if movie_left or movie_right :
+                if shoot:
+                    player.shoot()
+                if grenade and grenade_thrown==False and player.grenades>0:
+                    grenade=Grenade(player.rect.centerx+(-0.7*player.rect.size[0]*player.direction),
+                                    player.rect.top,
+                                    player.direction)
+                    grenade_group.add(grenade)
+                    grenade_thrown=True
+                    player.grenades-=1
 
-        if player.in_air:
-            player.updata_action(0)
-        #show step 跑或休息
-        if movie_left or movie_right:
-            player.updata_action(1)#1=run
-        else:
-            player.updata_action(0)
-        display_scroll=player.move(movie_left,movie_right)
-        bg_scroll-=display_scroll
-        
+            if player.in_air:
+                player.updata_action(0)
+            #show step 跑或休息
+            if movie_left or movie_right:
+                player.updata_action(1)#1=run
+            else:
+                player.updata_action(0)
+            display_scroll=player.move(movie_left,movie_right)
+            bg_scroll-=display_scroll
+
+        else: 
+            display_scroll = 0  # 跟速度有關
+            if restart_button.draw(DISPLAY):
+                bg_scroll = 0
+                # 確保 reset_level 是一個函數，並正確初始化 world_data
+                world_data = reset_level()  # 呼叫 reset_level 函數來初始化
+                
+                # 讀取 CSV 文件並更新 world_data
+                with open(f"level{level}_data.csv", newline='') as csvfile:
+                    reader = csv.reader(csvfile, delimiter=',')
+                    for x, row in enumerate(reader):
+                        for y, tile in enumerate(row):
+                            world_data[x][y] = int(tile)
+
+                # 創建新的 World 對象
+                world = World()
+                player, HPbar = world.process_data(world_data)
+
 
 
     for event in pygame.event.get():
