@@ -2,6 +2,8 @@ import pygame, sys
 import os
 import random
 import csv
+import gamepull
+
 pygame.init()
 #set time
 clock=pygame.time.Clock()
@@ -10,15 +12,15 @@ DISPLAY_WIDTH=800
 DISPLAY_HIGH=int(DISPLAY_WIDTH*0.8)
 #game vel
 GARVITY=0.75
-# TILE_SIZE= 20# 接觸居離
 ROWS=16
 COLS=150
-TILE_SIZE=DISPLAY_HIGH//ROWS
+TILE_SIZE=DISPLAY_HIGH//ROWS# 接觸居離
 SCROLL_THRESH=200
 TILE_TYPES=22
 display_scroll=0
 bg_scroll=0
 level =1
+start_game=False
 #display size
 DISPLAY = pygame.display.set_mode((DISPLAY_WIDTH,DISPLAY_HIGH))
 
@@ -40,13 +42,16 @@ for x in range(TILE_TYPES):
     img =pygame.image.load(f'img/Tile/{x}.png')
     img=pygame.transform.scale(img,(TILE_SIZE,TILE_SIZE))
     img_list.append(img)
-#bacj ground image
+#back ground image
 tree_img=pygame.image.load("./img/background/Tree.png").convert_alpha()
 tree_img = pygame.transform.scale(tree_img,(int((tree_img.get_height())),int(tree_img.get_width()*0.2)))
 city_img=pygame.image.load("./img/background/City.png").convert_alpha()
 city_img = pygame.transform.scale(city_img,(int((city_img.get_height())),int(city_img.get_width()*0.85)))
 mountain_img=pygame.image.load("./img/background/Mountain.png").convert_alpha()
 sky_img=pygame.image.load("./img/background/Sky.png").convert_alpha()
+#button image
+start_img=pygame.image.load("./img/button/start_button.png").convert_alpha()
+exit_img=pygame.image.load("./img/button/exit_button.png").convert_alpha()
 #load image
 bullet_img=pygame.image.load("./img/bullet/bullet.png").convert_alpha()
 bullet_img = pygame.transform.scale(bullet_img,(int((bullet_img.get_height())*0.5),int(bullet_img.get_width()*0.5)))
@@ -178,6 +183,10 @@ class human(pygame.sprite.Sprite):
            # check floor x
             if tile[1].colliderect(self.rect.x+dx,self.rect.y,self.width,self.height):
                 dx=0
+                # if ai saw the wall must be turn aronud
+                if self.character=='enemy':
+                    self.direction*=-1
+                    self.move_counter=0
             # check collision in y
             if tile[1].colliderect(self.rect.x,self.rect.y+dy,self.width,self.height):
                 #if jump
@@ -191,7 +200,10 @@ class human(pygame.sprite.Sprite):
         if self.character=='character':
             if self.rect.left+dx<0 or self.rect.right+dx>DISPLAY_WIDTH:
                 dx=0
-        
+        #going to edges or screen banned
+        if self.character=='character':
+            if self.rect.left+dx<0 or self.rect.right+dx>DISPLAY_WIDTH:
+             dx=0
 
         self.rect.x+=dx
         self.rect.y+=dy
@@ -571,7 +583,9 @@ exit_group=pygame.sprite.Group()
 # item_box_group.add(item_box)
 # item_box=Itembox('grenade',400,450)
 # item_box_group.add(item_box)
-
+#build button
+start_button=gamepull.Button(DISPLAY_WIDTH//2-10,DISPLAY_HIGH//2-200,start_img,0.5)
+exit_button=gamepull.Button(DISPLAY_WIDTH//2-240,DISPLAY_HIGH//2-200,exit_img,0.5)
 # # def platyer
 # #        (self,character, x,  y, size,speed,ammo,health,grenades)
 
@@ -606,57 +620,70 @@ player,HPbar=world.process_data(world_data)
 #main game
 while True:
     clock.tick(FPS)
-    draw_bg()
-    #updata background
-    world.draw()
-    #show enemy HPbar
-    # enemyHP.draw()
-    # enemyHP2.draw()
-    #show HPbar
-    HPbar.draw(player.health)
-    #文字數值機制
-    draw_text(f'AMMO: {player.ammo}',font,WHITE,10,35)
-    # draw_text(f'HP: {player.health}',font,WHITE,10,55)
-    draw_text(f'grenade:',font,WHITE,10,65)
-    for x in range(player.grenades):
-        DISPLAY.blit(grenade_img,(100+(x*30),62))
-    #player
-    player.update()
-    player.draw()
+    if not start_game:
+        # 菜單畫面
+        DISPLAY.fill((0, 0, 0))  # 黑色背景
 
-    #enemy
-    for enemy in enemy_group:
-        enemy.AI()
-        enemy.update()
-        enemy.draw()
-        enemyHP_group.update()
-        enemyHP_group.draw(DISPLAY)
-    for hp_bar in enemyHP_group:
-        hp_bar.draw()
-    # #enemy
-    # boss.update()
-    # boss.draw()d
+        # 繪製按鈕
+        if start_button.draw(DISPLAY):
+            start_game = True  # 切換到遊戲狀態
+        if exit_button.draw(DISPLAY):
+            running = False  
+            pygame.quit()
+            sys.exit()# 結束遊戲
+    else:
+        draw_bg()
+        #updata background
+        world.draw()
+        #show enemy HPbar
+        # enemyHP.draw()
+        # enemyHP2.draw()
+        #show HPbar
+        HPbar.draw(player.health)
+        #文字數值機制
+        draw_text(f'AMMO: {player.ammo}',font,WHITE,10,35)
+        # draw_text(f'HP: {player.health}',font,WHITE,10,55)
+        draw_text(f'grenade:',font,WHITE,10,65)
+        for x in range(player.grenades):
+            DISPLAY.blit(grenade_img,(100+(x*30),62))
+        #player
+        player.update()
+        player.draw()
+
+        #enemy
+        for enemy in enemy_group:
+            enemy.AI()
+            enemy.update()
+            enemy.draw()
+            enemyHP_group.update()
+            enemyHP_group.draw(DISPLAY)
+        for hp_bar in enemyHP_group:
+            hp_bar.draw()
+        # #enemy
+        # boss.update()
+        # boss.draw()d
+
+        
+
+        buttons = pygame.mouse.get_pressed()
+        #draw group
+        
+        explosion_group.update()
+        bullet_group.update()
+        grenade_group.update()
+        item_box_group.update()
+        water_group.update()
+        decoration_group.update()
+        exit_group.update()
 
 
-    buttons = pygame.mouse.get_pressed()
-    #draw group
-    
-    explosion_group.update()
-    bullet_group.update()
-    grenade_group.update()
-    item_box_group.update()
-    water_group.update()
-    decoration_group.update()
-    exit_group.update()
-
-
-    explosion_group.draw(DISPLAY)
-    bullet_group.draw(DISPLAY)
-    grenade_group.draw(DISPLAY)
-    item_box_group.draw(DISPLAY)
-    water_group.draw(DISPLAY)
-    decoration_group.draw(DISPLAY)
-    exit_group.draw(DISPLAY)
+        explosion_group.draw(DISPLAY)
+        bullet_group.draw(DISPLAY)
+        grenade_group.draw(DISPLAY)
+        item_box_group.draw(DISPLAY)
+        water_group.draw(DISPLAY)
+        decoration_group.draw(DISPLAY)
+        exit_group.draw(DISPLAY)
     
     
 
